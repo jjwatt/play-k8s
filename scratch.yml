@@ -1,0 +1,10 @@
+- step: &id001
+    instrument: Lasik 2000
+    pulse_energy: 5.4
+
+- step: &id002
+    instrument: Lasik 2000
+    pulse_energy: 5.0
+
+- Instrument1: *id001
+- Instrument2: *id002
