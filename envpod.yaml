@@ -13,4 +13,7 @@ spec:
     resources: {}
   dnsPolicy: ClusterFirst
   restartPolicy: Never
+  nodeSelector:
+    accelerator: nvidia-tesla-p100
 status: {}
+
