@@ -1,0 +1,93 @@
+# 1. The Shared Storage (Simulating NFS/Cloud Storage)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: rw-shared-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/data/writer-reader-demo"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rw-shared-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 1Gi
+---
+# 2. The StatefulSet with Identity Logic
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rw-app
+spec:
+  serviceName: "rw-service"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: rw-app
+  template:
+    metadata:
+      labels:
+        app: rw-app
+    spec:
+      # Keep pods on the same node so they access the same hostPath
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - minikube
+      containers:
+      - name: main
+        image: busybox
+        command:
+        - sh
+        - -c
+        - |
+          echo "My Hostname is: $(hostname)"
+
+          if [ "$(hostname)" = "rw-app-0" ]; then
+              echo "I am the PRIMARY (Writer). Starting write loop..."
+              while true; do
+                  echo "Data written by Primary at $(date)" >> /data/log.txt
+                  sleep 20
+              done
+          else
+              echo "I am a REPLICA (Reader). Following the log..."
+              until [ -f /data/log.txt ]; do sleep 1; done
+              tail -f /data/log.txt
+          fi
+        volumeMounts:
+        - name: shared-data
+          mountPath: /data
+      volumes:
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: rw-shared-pvc
+---
+# The Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: rw-service
+  labels:
+    app: rw-app
+spec:
+  ports:
+    - port: 80
+      name: web
+  clusterIP: None
+  selector:
+    app: rw-app
